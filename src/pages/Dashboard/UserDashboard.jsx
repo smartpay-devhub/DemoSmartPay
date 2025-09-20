@@ -1,35 +1,48 @@
-import { useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useEffect, useMemo, lazy, Suspense } from "react";
+import { useDispatch, useSelector, shallowEqual } from "react-redux";
 import { fetchDashboardData } from "../../redux/dashboard/dashboardActions";
 
 import AccountInfo from "../../components/dashboard/AccountInfo";
 import MarketData from "../../components/dashboard/MarketData";
-import PurchaseHistory from "../../components/dashboard/PurchaseHistory";
-import RewardHistory from "../../components/dashboard/RewardHistory";
 import LoadingScreen from "../../components/common/LoadingScreen";
 
+const PurchaseHistory = lazy(() =>
+  import("../../components/dashboard/PurchaseHistory")
+);
+const RewardHistory = lazy(() =>
+  import("../../components/dashboard/RewardHistory")
+);
+
 export default function Dashboard() {
-  const loginUser = JSON.parse(localStorage.getItem("authUser"));
+  const loginUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("authUser"));
+    } catch {
+      return null;
+    }
+  }, []);
 
   const dispatch = useDispatch();
   const { user, cryptos, purchaseHistory, rewardHistory, status, error } =
-    useSelector((state) => state.dashboard);
+    useSelector((state) => state.dashboard, shallowEqual);
 
   useEffect(() => {
     if (loginUser?.email) {
       dispatch(fetchDashboardData(loginUser.email));
     }
-  }, [dispatch]);
+  }, [dispatch, loginUser?.email]);
 
   if (status === "loading")
     return <LoadingScreen message="Loading dashboard..." />;
+
   if (status === "failed")
     return (
       <div className="min-h-screen flex items-center justify-center text-red-500 text-center">
         <p>Error: {error}</p>
       </div>
     );
-  if (!user) {
+
+  if (!loginUser?.email || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-700 text-center">
         <p>Please log in to continue.</p>
@@ -53,10 +66,14 @@ export default function Dashboard() {
         </div>
 
         <div className="mb-10">
-          <PurchaseHistory data={purchaseHistory} />
+          <Suspense fallback={<LoadingScreen message="Loading purchases..." />}>
+            <PurchaseHistory data={purchaseHistory} />
+          </Suspense>
         </div>
 
-        <RewardHistory data={rewardHistory} />
+        <Suspense fallback={<LoadingScreen message="Loading rewards..." />}>
+          <RewardHistory data={rewardHistory} />
+        </Suspense>
       </div>
     </div>
   );
